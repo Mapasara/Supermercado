@@ -2,101 +2,139 @@ import streamlit as st
 import pandas as pd
 import os
 
-# Tenta carregar o gráfico, se não der, o app avisa sem travar
+# Tenta carregar o gráfico (Plotly)
 try:
     import plotly.express as px
     PLOTLY_DISPONIVEL = True
 except ImportError:
     PLOTLY_DISPONIVEL = False
 
-st.set_page_config(page_title="Minha Compra Master", layout="wide")
+st.set_page_config(page_title="Gestor de Compras", layout="wide")
 
-# --- 1. BANCO DE DADOS ---
+# --- 1. BANCO DE DADOS E CONFIGURAÇÃO ---
 ARQUIVO_DADOS = "produtos_cadastrados.csv"
-SUBCLASSES = ["BÁSICO", "CAFÉ E LANCHE", "BOLACHAS", "HIGIENE", "LIMPEZA", "EU MEREÇO", "FRANGO", "VACA", "PORCO", "PEIXE", "VERDURAS", "LEGUMES", "FRUTAS"]
+SUBCLASSES = ["BÁSICO", "CAFÉ E LANCHE", "BOLACHAS", "HIGIENE", "LIMPEZA", "EU MEREÇO", "CARNES", "FRUTAS/LEGUMES", "OUTROS"]
 
 def carregar_dados():
     if os.path.exists(ARQUIVO_DADOS):
         return pd.read_csv(ARQUIVO_DADOS)
-    # Se o arquivo não existir, cria a lista padrão
-    produtos_lista = [
-        "Arroz", "Feijão", "Açúcar cristal", "Açucar refinado", "Farofa", "Trigo", 
-        "Farinha de rosca", "Farinha de milho", "Aveia", "Fubá", "Ovos cart 30", 
-        "Ovos cart 20", "Azeite", "Óleo de soja", "Óleo de milho", "Tapioca", 
-        "Azeitonas", "Molho Tom Quero", "Molho Tom Pomarola", "Milho", "Café", 
-        "Pão integral", "Leite condensado", "Requeijão", "Adoçante Zero cal", 
-        "Muçarela", "Mortadela", "Presunto", "Pizza", "Coador Evoluto", "Lentilha", 
-        "Grão de bico", "Água sanitária", "Amaciante", "Detergente", "Toalha papel", 
-        "Papel Higiênico", "Papel alumínio", "Plástico filme", "Saco de lixo 100", 
-        "Saco de lixo 50", "Desodorante", "Sabonete", "Cotonete", "Shampoo", 
-        "Absorvente", "Buchechol", "Alface", "Chicória", "Escarola", "Acelga", 
-        "Mostarda", "Tomate", "Cebola", "Chuchu", "Berinjela", "Jiló", "Cenoura", 
-        "Abacate", "Banana", "Maçã", "Kiui", "Jaboticaba", "Pêra", "Mixirica", 
-        "Abacaxi", "Frango à passarinho", "Filé de peito", "Linguiça", "Acém", 
-        "Patinho", "Alcatra suína", "Tilápia"
-    ]
-    return pd.DataFrame({
-        "Produto": sorted(produtos_lista),
-        "Subclasse": ["BÁSICO"] * len(produtos_lista)
-    })
+    # Lista inicial compacta para exemplo
+    return pd.DataFrame({"Produto": ["Arroz", "Feijão", "Açúcar"], "Subclasse": ["BÁSICO", "BÁSICO", "BÁSICO"]})
 
+# Inicialização do estado do App
 if 'df_mestre' not in st.session_state:
     st.session_state.df_mestre = carregar_dados()
 if 'carrinho' not in st.session_state:
     st.session_state.carrinho = pd.DataFrame(columns=["Produto", "Subclasse", "Qtd", "Preço", "Total"])
+if 'key_index' not in st.session_state:
+    st.session_state.key_index = 0
 
-st.title("🛒 Gestor Master")
+st.title("🛒 Minha Compra")
+
 aba_mercado, aba_config = st.tabs(["🛍️ No Mercado", "⚙️ Configurar Lista"])
 
-# --- ABA CONFIGURAÇÃO ---
+# --- ABA 2: CONFIGURAR LISTA (BOTÃO DE INSERIR VOLTOU) ---
 with aba_config:
-    st.subheader("⚙️ Configuração")
-    st.info("Ajuste as categorias e clique em SALVAR.")
-    df_editado = st.data_editor(st.session_state.df_mestre, column_config={"Subclasse": st.column_config.SelectboxColumn("Subclasse", options=SUBCLASSES)}, num_rows="dynamic", use_container_width=True)
-    if st.button("💾 SALVAR LISTA", use_container_width=True):
-        st.session_state.df_mestre = df_editado.drop_duplicates(subset=['Produto'])
+    st.subheader("⚙️ Gerenciar Meus Produtos")
+    st.write("Dica: Role até o final da tabela para adicionar novos itens ou clique duas vezes para editar.")
+    
+    # O data_editor com num_rows="dynamic" permite inserir novas linhas (botão +)
+    df_editado = st.data_editor(
+        st.session_state.df_mestre, 
+        column_config={
+            "Subclasse": st.column_config.SelectboxColumn("Categoria", options=SUBCLASSES, required=True),
+            "Produto": st.column_config.TextColumn("Nome do Produto", required=True)
+        }, 
+        num_rows="dynamic", 
+        use_container_width=True,
+        key="editor_mestre"
+    )
+    
+    if st.button("💾 SALVAR ALTERAÇÕES NA LISTA", use_container_width=True):
+        st.session_state.df_mestre = df_editado.dropna(subset=['Produto'])
         st.session_state.df_mestre.to_csv(ARQUIVO_DADOS, index=False)
-        st.success("✅ Salvo com sucesso!")
+        st.success("✅ Lista de produtos salva!")
         st.rerun()
 
-# --- ABA MERCADO ---
+# --- ABA 1: NO MERCADO ---
 with aba_mercado:
+    # 1. Valor Total (Mais discreto)
     total_compra = st.session_state.carrinho["Total"].sum()
-    st.markdown(f"<div style='background-color:#1E1E1E; padding:15px; border-radius:10px; border: 2px solid #4CAF50; text-align:center;'><h1 style='color:#4CAF50; margin:0;'>Total: R$ {total_compra:.2f}</h1></div>", unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style="background-color:#0E1117; padding:10px; border-radius:10px; border: 1px solid #4CAF50; text-align:center;">
+            <span style="color:#4CAF50; font-size:18px; font-weight:bold;">Total no Carrinho: R$ {total_compra:.2f}</span>
+        </div>
+    """, unsafe_allow_html=True)
 
+    # 2. Gráfico e Resumo (SÓ APARECEM SE HOUVER ITENS)
     if not st.session_state.carrinho.empty:
-        if PLOTLY_DISPONIVEL:
-            resumo = st.session_state.carrinho.groupby("Subclasse")["Total"].sum().reset_index()
-            fig = px.pie(resumo, values='Total', names='Subclasse', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250)
-            st.plotly_chart(fig, use_container_width=True)
-
-    st.subheader("🔍 Lançar")
-    if "key_index" not in st.session_state: st.session_state.key_index = 0
-    
-    # Busca com filtro
-    busca = st.text_input("Filtrar produto:", key=f"input_{st.session_state.key_index}").strip().lower()
-    lista_p = sorted(st.session_state.df_mestre["Produto"].tolist())
-    opcoes = [p for p in lista_p if busca in p.lower()] if busca else lista_p
-    escolha = st.selectbox(f"Resultados ({len(opcoes)}):", options=opcoes, index=None, key=f"select_{st.session_state.key_index}")
-
-    if escolha:
-        sub = st.session_state.df_mestre.loc[st.session_state.df_mestre["Produto"] == escolha, "Subclasse"].values[0]
-        st.info(f"Subclasse: {sub}")
-        c1, c2 = st.columns(2)
-        q = c1.number_input("Qtd:", min_value=0.0, value=1.0, step=0.1, key=f"q_{st.session_state.key_index}")
-        p = c2.number_input("Preço:", min_value=0.0, value=0.0, step=0.01, format="%.2f", key=f"p_{st.session_state.key_index}")
+        st.divider()
+        c_graf, c_resumo = st.columns([1.5, 1])
         
-        if st.button("🛒 CONFIRMAR LANÇAMENTO", use_container_width=True):
-            novo = pd.DataFrame([{"Produto": escolha, "Subclasse": sub, "Qtd": q, "Preço": p, "Total": q * p}])
-            st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo], ignore_index=True)
-            st.session_state.key_index += 1 # Limpa a busca
-            st.rerun()
+        with c_graf:
+            if PLOTLY_DISPONIVEL:
+                resumo_df = st.session_state.carrinho.groupby("Subclasse")["Total"].sum().reset_index()
+                fig = px.pie(resumo_df, values='Total', names='Subclasse', hole=0.5, 
+                             color_discrete_sequence=px.colors.qualitative.Set3)
+                fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=200, showlegend=False)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with c_resumo:
+            st.write("*Gasto por Categoria:*")
+            resumo_texto = st.session_state.carrinho.groupby("Subclasse")["Total"].sum()
+            for cat, valor in resumo_texto.items():
+                st.write(f"• {cat}: R$ {valor:.2f}")
 
     st.divider()
+    
+    # 3. Busca e Lançamento (CAMPOS DE PREÇO E QTD APARECEM APÓS SELECIONAR)
+    st.subheader("🔍 Localizar Produto")
+    
+    texto_busca = st.text_input("Digite o nome:", key=f"bus_{st.session_state.key_index}").strip().lower()
+    
+    lista_nomes = sorted(st.session_state.df_mestre["Produto"].tolist())
+    filtro = [p for p in lista_nomes if texto_busca in p.lower()] if texto_busca else lista_nomes
+    
+    escolha = st.selectbox(f"Resultados ({len(filtro)}):", options=filtro, index=None, 
+                          placeholder="Clique para escolher...", key=f"sel_{st.session_state.key_index}")
+
+    if escolha:
+        # Pega a categoria do produto escolhido
+        linha = st.session_state.df_mestre[st.session_state.df_mestre["Produto"] == escolha]
+        cat_escolhida = linha["Subclasse"].values[0] if not linha.empty else "OUTROS"
+        
+        st.info(f"📍 Categoria: {cat_escolhida}")
+        
+        # CAMPOS DE DIGITAÇÃO QUE VOCÊ SENTIU FALTA:
+        col_q, col_p = st.columns(2)
+        with col_q:
+            qtd = st.number_input("Quantidade:", min_value=0.01, value=1.0, step=0.1)
+        with col_p:
+            preco = st.number_input("Preço Unitário (R$):", min_value=0.0, value=0.0, step=0.01, format="%.2f")
+            
+        if st.button("🛒 ADICIONAR AO CARRINHO", use_container_width=True):
+            if preco > 0:
+                novo_item = pd.DataFrame([{
+                    "Produto": escolha, "Subclasse": cat_escolhida, 
+                    "Qtd": qtd, "Preço": preco, "Total": qtd * preco
+                }])
+                st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo_item], ignore_index=True)
+                st.session_state.key_index += 1 # Reseta a busca
+                st.rerun()
+            else:
+                st.warning("Insira o preço antes de confirmar!")
+
+    # 4. Lista do Carrinho
     if not st.session_state.carrinho.empty:
-        st.write("### 📝 Carrinho")
-        st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True)
-        if st.button("🗑️ Esvaziar Tudo", use_container_width=True):
+        st.divider()
+        st.write("### 📝 Itens Lançados")
+        # Editor para o carrinho (permite deletar linhas selecionando e apertando 'Delete')
+        car_editado = st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True, key="edit_carrinho")
+        
+        if not car_editado.equals(st.session_state.carrinho):
+            st.session_state.carrinho = car_editado
+            st.rerun()
+
+        if st.button("🗑️ LIMPAR TODA A COMPRA", use_container_width=True):
             st.session_state.carrinho = pd.DataFrame(columns=["Produto", "Subclasse", "Qtd", "Preço", "Total"])
             st.rerun()
