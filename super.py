@@ -50,7 +50,7 @@ with aba_config:
         st.success("✅ Lista atualizada!")
         st.rerun()
 
-# --- ABA NO MERCADO ---
+[08:36, 09/03/2026] Mapasara Meta Digital: # --- ABA NO MERCADO ---
 with aba_mercado:
     total_compra = st.session_state.carrinho["Total"].sum()
     
@@ -107,6 +107,76 @@ with aba_mercado:
             st.rerun()
 
     st.divider()
+    
+    if not st.session_state.carrinho.empty:
+        st.write("### 📝 Carrinho")
+        st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True)
+        
+        if st.button("🗑️ Esvaziar Tudo", use_container_width=True):
+            st.session_state.carrinho = pd.DataFrame(columns=["Produto", "Subclasse", "Qtd", "Preço", "Total"])
+            st.rerun()
+[08:45, 09/03/2026] Mapasara Meta Digital: # --- ABA NO MERCADO (COM BUSCA OTIMIZADA) ---
+with aba_mercado:
+    total_compra = st.session_state.carrinho["Total"].sum()
+    
+    st.markdown(f"""
+        <div style="background-color:#1E1E1E; padding:15px; border-radius:10px; border: 2px solid #4CAF50; text-align:center; margin-bottom:20px;">
+            <h1 style="color:#4CAF50; margin:0; font-size:28px;">Total: R$ {total_compra:.2f}</h1>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if not st.session_state.carrinho.empty:
+        resumo_grafico = st.session_state.carrinho.groupby("Subclasse")["Total"].sum().reset_index()
+        fig = px.pie(resumo_grafico, values='Total', names='Subclasse', hole=0.4, 
+                     color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=250)
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.subheader("🔍 Localizar e Lançar")
+    
+    # BUSCA INTELIGENTE POR PALAVRA
+    busca_palavra = st.text_input("Digite parte do nome (ex: arroz, papel):", key="filtro_palavra").strip().lower()
+    
+    # Filtra a lista mestre com base no que foi digitado
+    lista_completa = sorted(st.session_state.df_mestre["Produto"].tolist())
+    if busca_palavra:
+        opcoes_filtradas = [p for p in lista_completa if busca_palavra in p.lower()]
+    else:
+        opcoes_filtradas = lista_completa
+
+    # Selectbox que mostra apenas o que o filtro encontrou
+    if "reset_busca" not in st.session_state: st.session_state.reset_busca = 0
+    
+    escolha = st.selectbox(
+        f"Resultados ({len(opcoes_filtradas)} encontrados):", 
+        options=opcoes_filtradas, 
+        index=None, 
+        placeholder="Selecione o produto aqui...",
+        key=f"sel_{st.session_state.reset_busca}"
+    )
+
+    if escolha:
+        # Busca subclasse sincronizada
+        linha = st.session_state.df_mestre[st.session_state.df_mestre["Produto"] == escolha]
+        sub_identificada = linha["Subclasse"].values[0] if not linha.empty else "BÁSICO"
+        
+        st.success(f"Selecionado: *{escolha}* ({sub_identificada})")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            qtd_in = st.number_input("Qtd:", min_value=0.0, value=1.0, step=0.1, key="q_input")
+        with c2:
+            preco_in = st.number_input("Preço Unitário:", min_value=0.0, value=0.0, step=0.01, format="%.2f", key="p_input")
+            
+        if st.button("🛒 CONFIRMAR LANÇAMENTO", use_container_width=True):
+            novo = pd.DataFrame([{"Produto": escolha, "Subclasse": sub_identificada, "Qtd": qtd_in, "Preço": preco_in, "Total": qtd_in * preco_in}])
+            st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo], ignore_index=True)
+            st.session_state.reset_busca += 1
+            # Limpa o texto da busca para o próximo item
+            st.rerun()
+
+    st.divider()
+    # ... (resto do código do carrinho abaixo)
     
     if not st.session_state.carrinho.empty:
         st.write("### 📝 Carrinho")
