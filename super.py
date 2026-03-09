@@ -105,3 +105,4 @@ with aba_mercado:
         if st.button("🗑️ Limpar Carrinho"):
             st.session_state.carrinho = pd.DataFrame(columns=["Produto", "Subclasse", "Qtd", "Preço", "Total"])
             st.rerun() continuar outro
+            <!--end list_
