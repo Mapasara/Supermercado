@@ -1,5 +1,4 @@
 import streamlit as st
-
 import pandas as pd
 import os
 
@@ -15,7 +14,6 @@ SUBCLASSES = [
 
 # Função para carregar a lista de produtos
 def carregar_dados():
-    # Tenta ler o arquivo salvo primeiro
     if os.path.exists(ARQUIVO_DADOS):
         try:
             df = pd.read_csv(ARQUIVO_DADOS)
@@ -24,7 +22,6 @@ def carregar_dados():
         except:
             pass
     
-    # Se o arquivo não existir ou falhar, usa a lista inicial
     produtos_lista = [
         "Arroz", "Feijão", "Açúcar cristal", "Açucar refinado", "Farofa", "Trigo", 
         "Farinha de rosca", "Farinha de milho", "Aveia", "Fubá", "Ovos cart 30", 
@@ -42,14 +39,11 @@ def carregar_dados():
         "Patinho", "Alcatra suína", "Tilápia"
     ]
     
-    # O SEGREDO: Criamos a tabela garantindo que as duas colunas tenham o MESMO tamanho
-    df_inicial = pd.DataFrame({
+    return pd.DataFrame({
         "Produto": produtos_lista,
-        "Subclasse": ["BÁSICO"] * len(produtos_lista) # O computador conta o tamanho aqui
+        "Subclasse": ["BÁSICO"] * len(produtos_lista)
     })
-    return df_inicial
 
-# Inicializa o estado da sessão
 if 'df_mestre' not in st.session_state:
     st.session_state.df_mestre = carregar_dados()
 
@@ -61,20 +55,14 @@ st.title("🛒 Gestor de Compras Inteligente")
 
 aba_mercado, aba_config = st.tabs(["🛍️ No Mercado", "⚙️ Configurar Lista"])
 
-# --- ABA DE CONFIGURAÇÃO ---
 with aba_config:
     st.subheader("Sua Lista de Produtos")
-    st.info("Ajuste as subclasses abaixo e clique em SALVAR para gravar permanentemente.")
-    
-    # Editor da tabela mestra
     df_editado = st.data_editor(
         st.session_state.df_mestre,
-        column_config={
-            "Subclasse": st.column_config.SelectboxColumn("Subclasse", options=SUBCLASSES)
-        },
+        column_config={"Subclasse": st.column_config.SelectboxColumn("Subclasse", options=SUBCLASSES)},
         num_rows="dynamic",
         use_container_width=True,
-        key="editor_config_v2"
+        key="editor_config_v3"
     )
     
     if st.button("💾 SALVAR LISTA DEFINITIVAMENTE", use_container_width=True):
@@ -83,17 +71,14 @@ with aba_config:
         st.success("✅ Lista gravada com sucesso!")
         st.rerun()
 
-# --- ABA NO MERCADO ---
 with aba_mercado:
     total_compra = st.session_state.carrinho["Total"].sum()
     st.metric("VALOR TOTAL NO CARRINHO", f"R$ {total_compra:.2f}")
 
-    # Busca inteligente
     lista_busca = sorted(st.session_state.df_mestre["Produto"].unique().tolist())
-    escolha = st.selectbox("Buscar Produto:", options=lista_busca, index=None, placeholder="Digite o nome...")
+    escolha = st.selectbox("Buscar Produto:", options=lista_busca, index=None)
 
     if escolha:
-        # Puxa a subclasse salva
         sub_item = st.session_state.df_mestre.loc[st.session_state.df_mestre["Produto"] == escolha, "Subclasse"].values[0]
         st.caption(f"Categoria: {sub_item}")
         
@@ -106,15 +91,12 @@ with aba_mercado:
         if st.button("🛒 LANÇAR NO CARRINHO", use_container_width=True):
             novo = pd.DataFrame([{"Produto": escolha, "Subclasse": sub_item, "Qtd": q_in, "Preço": p_in, "Total": q_in * p_in}])
             st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo], ignore_index=True)
-            st.toast(f"{escolha} adicionado!")
             st.rerun()
 
     st.divider()
     
     if not st.session_state.carrinho.empty:
-        st.write("### Itens no Carrinho")
-        carrinho_atualizado = st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True, key="carrinho_editor")
-        
+        carrinho_atualizado = st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True)
         if not carrinho_atualizado.equals(st.session_state.carrinho):
             carrinho_atualizado["Total"] = carrinho_atualizado["Qtd"] * carrinho_atualizado["Preço"]
             st.session_state.carrinho = carrinho_atualizado
