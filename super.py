@@ -1,4 +1,5 @@
 import streamlit as st
+import pd
 import pandas as pd
 import os
 
@@ -12,35 +13,41 @@ SUBCLASSES = [
     "VERDURAS", "LEGUMES", "FRUTAS"
 ]
 
-# Função para carregar a lista de produtos (do arquivo ou da lista inicial)
+# Função para carregar a lista de produtos
 def carregar_dados():
+    # Tenta ler o arquivo salvo primeiro
     if os.path.exists(ARQUIVO_DADOS):
         try:
-            return pd.read_csv(ARQUIVO_DADOS)
+            df = pd.read_csv(ARQUIVO_DADOS)
+            if not df.empty:
+                return df
         except:
             pass
     
-    # Lista inicial de 74 itens caso o arquivo não exista
-    dados_iniciais = {
-        "Produto": [
-            "Arroz", "Feijão", "Açúcar cristal", "Açucar refinado", "Farofa", "Trigo", 
-            "Farinha de rosca", "Farinha de milho", "Aveia", "Fubá", "Ovos cart 30", 
-            "Ovos cart 20", "Azeite", "Óleo de soja", "Óleo de milho", "Tapioca", 
-            "Azeitonas", "Molho Tom Quero", "Molho Tom Pomarola", "Milho", "Café", 
-            "Pão integral", "Leite condensado", "Requeijão", "Adoçante Zero cal", 
-            "Muçarela", "Mortadela", "Presunto", "Pizza", "Coador Evoluto", "Lentilha", 
-            "Grão de bico", "Água sanitária", "Amaciante", "Detergente", "Toalha papel", 
-            "Papel Higiênico", "Papel alumínio", "Plástico filme", "Saco de lixo 100", 
-            "Saco de lixo 50", "Desodorante", "Sabonete", "Cotonete", "Shampoo", 
-            "Absorvente", "Buchechol", "Alface", "Chicória", "Escarola", "Acelga", 
-            "Mostarda", "Tomate", "Cebola", "Chuchu", "Berinjela", "Jiló", "Cenoura", 
-            "Abacate", "Banana", "Maçã", "Kiui", "Jaboticaba", "Pêra", "Mixirica", 
-            "Abacaxi", "Frango à passarinho", "Filé de peito", "Linguiça", "Acém", 
-            "Patinho", "Alcatra suína", "Tilápia"
-        ],
-        "Subclasse": ["BÁSICO"] * 74
-    }
-    return pd.DataFrame(dados_iniciais)
+    # Se o arquivo não existir ou falhar, usa a lista inicial
+    produtos_lista = [
+        "Arroz", "Feijão", "Açúcar cristal", "Açucar refinado", "Farofa", "Trigo", 
+        "Farinha de rosca", "Farinha de milho", "Aveia", "Fubá", "Ovos cart 30", 
+        "Ovos cart 20", "Azeite", "Óleo de soja", "Óleo de milho", "Tapioca", 
+        "Azeitonas", "Molho Tom Quero", "Molho Tom Pomarola", "Milho", "Café", 
+        "Pão integral", "Leite condensado", "Requeijão", "Adoçante Zero cal", 
+        "Muçarela", "Mortadela", "Presunto", "Pizza", "Coador Evoluto", "Lentilha", 
+        "Grão de bico", "Água sanitária", "Amaciante", "Detergente", "Toalha papel", 
+        "Papel Higiênico", "Papel alumínio", "Plástico filme", "Saco de lixo 100", 
+        "Saco de lixo 50", "Desodorante", "Sabonete", "Cotonete", "Shampoo", 
+        "Absorvente", "Buchechol", "Alface", "Chicória", "Escarola", "Acelga", 
+        "Mostarda", "Tomate", "Cebola", "Chuchu", "Berinjela", "Jiló", "Cenoura", 
+        "Abacate", "Banana", "Maçã", "Kiui", "Jaboticaba", "Pêra", "Mixirica", 
+        "Abacaxi", "Frango à passarinho", "Filé de peito", "Linguiça", "Acém", 
+        "Patinho", "Alcatra suína", "Tilápia"
+    ]
+    
+    # O SEGREDO: Criamos a tabela garantindo que as duas colunas tenham o MESMO tamanho
+    df_inicial = pd.DataFrame({
+        "Produto": produtos_lista,
+        "Subclasse": ["BÁSICO"] * len(produtos_lista) # O computador conta o tamanho aqui
+    })
+    return df_inicial
 
 # Inicializa o estado da sessão
 if 'df_mestre' not in st.session_state:
@@ -50,14 +57,14 @@ if 'carrinho' not in st.session_state:
     st.session_state.carrinho = pd.DataFrame(columns=["Produto", "Subclasse", "Qtd", "Preço", "Total"])
 
 # --- 2. INTERFACE ---
-st.title("🛒 Supermercado Inteligente")
+st.title("🛒 Gestor de Compras Inteligente")
 
 aba_mercado, aba_config = st.tabs(["🛍️ No Mercado", "⚙️ Configurar Lista"])
 
-# --- ABA DE CONFIGURAÇÃO (MEMÓRIA) ---
+# --- ABA DE CONFIGURAÇÃO ---
 with aba_config:
-    st.subheader("Sua Lista de Produtos (Salva no Arquivo)")
-    st.info("Edite as subclasses e nomes abaixo e clique no botão azul para salvar.")
+    st.subheader("Sua Lista de Produtos")
+    st.info("Ajuste as subclasses abaixo e clique em SALVAR para gravar permanentemente.")
     
     # Editor da tabela mestra
     df_editado = st.data_editor(
@@ -67,16 +74,16 @@ with aba_config:
         },
         num_rows="dynamic",
         use_container_width=True,
-        key="editor_config"
+        key="editor_config_v2"
     )
     
     if st.button("💾 SALVAR LISTA DEFINITIVAMENTE", use_container_width=True):
         st.session_state.df_mestre = df_editado
         st.session_state.df_mestre.to_csv(ARQUIVO_DADOS, index=False)
-        st.success("✅ Lista gravada permanentemente no arquivo!")
+        st.success("✅ Lista gravada com sucesso!")
         st.rerun()
 
-# --- ABA NO MERCADO (USO) ---
+# --- ABA NO MERCADO ---
 with aba_mercado:
     total_compra = st.session_state.carrinho["Total"].sum()
     st.metric("VALOR TOTAL NO CARRINHO", f"R$ {total_compra:.2f}")
@@ -86,9 +93,9 @@ with aba_mercado:
     escolha = st.selectbox("Buscar Produto:", options=lista_busca, index=None, placeholder="Digite o nome...")
 
     if escolha:
-        # Puxa a subclasse que está configurada para este produto
+        # Puxa a subclasse salva
         sub_item = st.session_state.df_mestre.loc[st.session_state.df_mestre["Produto"] == escolha, "Subclasse"].values[0]
-        st.caption(f"Subclasse: {sub_item}")
+        st.caption(f"Categoria: {sub_item}")
         
         col_q, col_p = st.columns(2)
         with col_q:
@@ -105,16 +112,14 @@ with aba_mercado:
     st.divider()
     
     if not st.session_state.carrinho.empty:
-        st.write("### Itens Lançados")
-        # Editor do carrinho caso precise corrigir algo na hora
-        carrinho_atualizado = st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True)
+        st.write("### Itens no Carrinho")
+        carrinho_atualizado = st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True, key="carrinho_editor")
         
         if not carrinho_atualizado.equals(st.session_state.carrinho):
             carrinho_atualizado["Total"] = carrinho_atualizado["Qtd"] * carrinho_atualizado["Preço"]
             st.session_state.carrinho = carrinho_atualizado
             st.rerun()
             
-        # Resumo por Subclasse com Percentual
         with st.expander("📊 RESUMO POR SUBCLASSE", expanded=True):
             res = st.session_state.carrinho.groupby("Subclasse")["Total"].sum().reset_index()
             if total_compra > 0:
