@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import time
 
-# Tenta carregar o Plotly
 try:
     import plotly.express as px
     PLOTLY_DISPONIVEL = True
@@ -12,31 +11,16 @@ except ImportError:
 
 st.set_page_config(page_title="Minha Compra", layout="wide")
 
-# --- 1. BANCO DE DADOS E NOVAS SUBCLASSES ---
+# --- 1. CONFIGURAÇÕES E CATEGORIAS ---
 ARQUIVO_DADOS = "produtos_cadastrados.csv"
-
-# Categorias atualizadas conforme sua solicitação
-SUBCLASSES = [
-    "BÁSICO", 
-    "CAFÉ/LANCHE", 
-    "BOLACHA",
-    "HIGIENE", 
-    "LIMPEZA", 
-    "FRANGO", 
-    "VACA", 
-    "PEIXES", 
-    "LEGUMES", 
-    "VERDURAS", 
-    "FRUTAS", 
-    "EU MEREÇO", 
-    "OUTROS"
-]
+SUBCLASSES = ["BÁSICO", "CAFÉ/LANCHE", "BOLACHA", "HIGIENE", "LIMPEZA", "FRANGO", "VACA", "PEIXES", "LEGUMES", "VERDURAS", "FRUTAS", "EU MEREÇO", "OUTROS"]
 
 def carregar_dados():
     if os.path.exists(ARQUIVO_DADOS):
         df = pd.read_csv(ARQUIVO_DADOS)
         if not df.empty:
-            return df.dropna(subset=['Produto'])
+            # Remove duplicados e ordena por nome ao carregar
+            return df.drop_duplicates(subset=['Produto']).sort_values(by='Produto').reset_index(drop=True)
     return pd.DataFrame({"Produto": ["Arroz"], "Subclasse": ["BÁSICO"]})
 
 # Inicialização de Estados
@@ -76,10 +60,8 @@ with aba_mercado:
         st.divider()
 
     st.subheader("🔍 Lançar Produto")
-    
     lista_nomes = sorted(st.session_state.df_mestre["Produto"].unique().tolist())
 
-    # SELETOR (A chave muda após cada confirmação para resetar tudo)
     produto_sel = st.selectbox(
         "Selecione ou digite o produto:",
         options=lista_nomes,
@@ -91,7 +73,6 @@ with aba_mercado:
     if produto_sel:
         df_p = st.session_state.df_mestre[st.session_state.df_mestre["Produto"] == produto_sel]
         cat_p = df_p["Subclasse"].values[0] if not df_p.empty else "OUTROS"
-        
         st.info(f"📍 Selecionado: *{produto_sel}* | Categoria: *{cat_p}*")
 
         col_q, col_p = st.columns(2)
@@ -100,20 +81,14 @@ with aba_mercado:
         
         if st.button("🛒 CONFIRMAR LANÇAMENTO", use_container_width=True):
             if v_pre > 0:
-                novo = pd.DataFrame([{
-                    "Produto": produto_sel, "Subclasse": cat_p, 
-                    "Qtd": v_qtd, "Preço": v_pre, "Total": v_qtd * v_pre
-                }])
+                novo = pd.DataFrame([{"Produto": produto_sel, "Subclasse": cat_p, "Qtd": v_qtd, "Preço": v_pre, "Total": v_qtd * v_pre}])
                 st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo], ignore_index=True)
-                
-                st.toast(f"✅ {produto_sel} adicionado!", icon='🛒')
-                
-                # INCREMENTA PARA LIMPAR OS CAMPOS
+                st.toast(f"✅ {produto_sel} adicionado!")
                 st.session_state.contador_reset += 1
                 time.sleep(0.3)
                 st.rerun()
             else:
-                st.error("Insira o preço antes de confirmar!")
+                st.error("Insira o preço!")
 
     if not st.session_state.carrinho.empty:
         st.divider()
@@ -125,21 +100,39 @@ with aba_mercado:
 
 # --- ABA 2: CONFIGURAR LISTA ---
 with aba_config:
-    st.subheader("⚙️ Gerenciar Categorias e Produtos")
-    st.info("Aqui você define a categoria correta para cada item da sua lista mestre.")
+    st.subheader("⚙️ Gerenciar Lista de Produtos")
+    
+    # Preparar DF para exibição com contagem começando em 1
+    df_exibir = st.session_state.df_mestre.copy()
+    df_exibir.index = df_exibir.index + 1
+    
+    st.write(f"Total de produtos cadastrados: *{len(df_exibir)}*")
     
     mestre_ed = st.data_editor(
-        st.session_state.df_mestre, 
+        df_exibir, 
         column_config={
             "Subclasse": st.column_config.SelectboxColumn("Categoria", options=SUBCLASSES, required=True),
             "Produto": st.column_config.TextColumn("Nome do Produto", required=True)
         }, 
         num_rows="dynamic", 
-        use_container_width=True
+        use_container_width=True,
+        key="editor_mestre"
     )
     
     if st.button("💾 SALVAR LISTA PERMANENTE", use_container_width=True):
-        st.session_state.df_mestre = mestre_ed.dropna(subset=['Produto'])
+        # 1. Remove linhas onde o nome do produto é nulo ou vazio
+        novo_df = mestre_ed.dropna(subset=['Produto'])
+        novo_df = novo_df[novo_df['Produto'].str.strip() != ""]
+        
+        # 2. Remove duplicatas para evitar o bug de "sumir um ao cadastrar outro"
+        novo_df = novo_df.drop_duplicates(subset=['Produto'])
+        
+        # 3. Ordena alfabeticamente para organização
+        novo_df = novo_df.sort_values(by='Produto').reset_index(drop=True)
+        
+        # 4. Salva no Estado e no Arquivo
+        st.session_state.df_mestre = novo_df
         st.session_state.df_mestre.to_csv(ARQUIVO_DADOS, index=False)
-        st.success(f"✅ Lista com {len(st.session_state.df_mestre)} produtos salva com sucesso!")
+        st.success(f"✅ Lista atualizada! Agora temos {len(novo_df)} produtos.")
+        time.sleep(1)
         st.rerun()
