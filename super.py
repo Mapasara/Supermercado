@@ -12,16 +12,32 @@ except ImportError:
 
 st.set_page_config(page_title="Minha Compra", layout="wide")
 
-# --- 1. BANCO DE DADOS ---
+# --- 1. BANCO DE DADOS E NOVAS SUBCLASSES ---
 ARQUIVO_DADOS = "produtos_cadastrados.csv"
-SUBCLASSES = ["BÁSICO", "CAFÉ/LANCHE", "HIGIENE", "LIMPEZA", "CARNES", "FRUTAS/LEGUMES", "OUTROS"]
+
+# Categorias atualizadas conforme sua solicitação
+SUBCLASSES = [
+    "BÁSICO", 
+    "CAFÉ/LANCHE", 
+    "BOLACHA",
+    "HIGIENE", 
+    "LIMPEZA", 
+    "FRANGO", 
+    "VACA", 
+    "PEIXES", 
+    "LEGUMES", 
+    "VERDURAS", 
+    "FRUTAS", 
+    "EU MEREÇO", 
+    "OUTROS"
+]
 
 def carregar_dados():
     if os.path.exists(ARQUIVO_DADOS):
         df = pd.read_csv(ARQUIVO_DADOS)
         if not df.empty:
             return df.dropna(subset=['Produto'])
-    return pd.DataFrame({"Produto": ["Arroz", "Feijão"], "Subclasse": ["BÁSICO", "BÁSICO"]})
+    return pd.DataFrame({"Produto": ["Arroz"], "Subclasse": ["BÁSICO"]})
 
 # Inicialização de Estados
 if 'df_mestre' not in st.session_state:
@@ -53,7 +69,7 @@ with aba_mercado:
                 fig.update_layout(margin=dict(t=0, b=0, l=0, r=0), height=140, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
         with c2:
-            st.caption("📂 Resumo:")
+            st.caption("📂 Resumo por Categoria:")
             res_txt = st.session_state.carrinho.groupby("Subclasse")["Total"].sum()
             for c, v in res_txt.items():
                 st.write(f"*{c}:* R$ {v:.2f}")
@@ -76,10 +92,9 @@ with aba_mercado:
         df_p = st.session_state.df_mestre[st.session_state.df_mestre["Produto"] == produto_sel]
         cat_p = df_p["Subclasse"].values[0] if not df_p.empty else "OUTROS"
         
-        st.info(f"📍 Selecionado: *{produto_sel}*")
+        st.info(f"📍 Selecionado: *{produto_sel}* | Categoria: *{cat_p}*")
 
         col_q, col_p = st.columns(2)
-        # O valor inicial volta para 1.0 e 0.0 toda vez que o contador_reset muda
         v_qtd = col_q.number_input("Qtd:", min_value=0.1, value=1.0, step=0.1, key=f"q_{st.session_state.contador_reset}")
         v_pre = col_p.number_input("Preço R$:", min_value=0.0, value=0.0, step=0.01, format="%.2f", key=f"p_{st.session_state.contador_reset}")
         
@@ -91,20 +106,18 @@ with aba_mercado:
                 }])
                 st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo], ignore_index=True)
                 
-                # AVISO VISUAL DE SUCESSO
                 st.toast(f"✅ {produto_sel} adicionado!", icon='🛒')
                 
-                # MUDA A CHAVE PARA LIMPAR OS CAMPOS NO PRÓXIMO
+                # INCREMENTA PARA LIMPAR OS CAMPOS
                 st.session_state.contador_reset += 1
-                time.sleep(0.5)
+                time.sleep(0.3)
                 st.rerun()
             else:
                 st.error("Insira o preço antes de confirmar!")
 
     if not st.session_state.carrinho.empty:
         st.divider()
-        st.write("### 📝 Carrinho")
-        # Editor para remover itens se clicar 2 vezes por erro
+        st.write("### 📝 Carrinho Atual")
         car_ed = st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True)
         if not car_ed.equals(st.session_state.carrinho):
             st.session_state.carrinho = car_ed
@@ -112,18 +125,21 @@ with aba_mercado:
 
 # --- ABA 2: CONFIGURAR LISTA ---
 with aba_config:
-    st.subheader("⚙️ Gerenciar Lista")
+    st.subheader("⚙️ Gerenciar Categorias e Produtos")
+    st.info("Aqui você define a categoria correta para cada item da sua lista mestre.")
+    
     mestre_ed = st.data_editor(
         st.session_state.df_mestre, 
         column_config={
             "Subclasse": st.column_config.SelectboxColumn("Categoria", options=SUBCLASSES, required=True),
-            "Produto": st.column_config.TextColumn("Nome", required=True)
+            "Produto": st.column_config.TextColumn("Nome do Produto", required=True)
         }, 
         num_rows="dynamic", 
         use_container_width=True
     )
-    if st.button("💾 SALVAR LISTA PERMANENTE"):
+    
+    if st.button("💾 SALVAR LISTA PERMANENTE", use_container_width=True):
         st.session_state.df_mestre = mestre_ed.dropna(subset=['Produto'])
         st.session_state.df_mestre.to_csv(ARQUIVO_DADOS, index=False)
-        st.success("✅ Lista salva!")
+        st.success(f"✅ Lista com {len(st.session_state.df_mestre)} produtos salva com sucesso!")
         st.rerun()
