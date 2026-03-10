@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 
-# Tenta carregar o Plotly para o gráfico
+# Tenta carregar o Plotly
 try:
     import plotly.express as px
     PLOTLY_DISPONIVEL = True
@@ -11,14 +11,17 @@ except ImportError:
 
 st.set_page_config(page_title="Minha Compra", layout="wide")
 
-# --- 1. BANCO DE DADOS ---
+# --- 1. BANCO DE DADOS (COM TRAVA DE SEGURANÇA) ---
 ARQUIVO_DADOS = "produtos_cadastrados.csv"
 SUBCLASSES = ["BÁSICO", "CAFÉ/LANCHE", "HIGIENE", "LIMPEZA", "CARNES", "FRUTAS/LEGUMES", "OUTROS"]
 
 def carregar_dados():
     if os.path.exists(ARQUIVO_DADOS):
-        return pd.read_csv(ARQUIVO_DADOS).dropna(subset=['Produto'])
-    return pd.DataFrame({"Produto": ["Arroz", "Feijão"], "Subclasse": ["BÁSICO", "BÁSICO"]})
+        df = pd.read_csv(ARQUIVO_DADOS)
+        if not df.empty:
+            return df.dropna(subset=['Produto'])
+    # Se o arquivo sumiu, ele inicia com estes básicos (você pode colar sua lista de 72 aqui depois)
+    return pd.DataFrame({"Produto": ["Arroz", "Feijão", "Açúcar"], "Subclasse": ["BÁSICO", "BÁSICO", "BÁSICO"]})
 
 if 'df_mestre' not in st.session_state:
     st.session_state.df_mestre = carregar_dados()
@@ -36,7 +39,7 @@ st.markdown(f"""
 
 aba_mercado, aba_config = st.tabs(["🛍️ No Mercado", "⚙️ Configurar Lista"])
 
-# --- ABA 1: NO MERCADO ---
+# --- ABA 1: NO MERCADO (SEM FORMULÁRIO PARA O ENTER FUNCIONAR) ---
 with aba_mercado:
     if not st.session_state.carrinho.empty:
         c1, c2 = st.columns([1, 1])
@@ -55,53 +58,47 @@ with aba_mercado:
 
     st.subheader("🔍 Lançar Produto")
     
-    # LISTA MESTRA PARA O SELETOR
     lista_produtos = sorted(st.session_state.df_mestre["Produto"].unique().tolist())
 
-    # FORMULÁRIO ÚNICO (Onde a mágica acontece)
-    with st.form("form_mercado", clear_on_submit=True):
-        # O SELETOR ABAIXO JÁ FAZ O FILTRO INTELIGENTE SOZINHO:
-        escolha = st.selectbox(
-            "Selecione ou Digite o Produto:", 
-            options=lista_produtos, 
-            index=None, 
-            placeholder="Clique para buscar..."
-        )
+    # Escolha do produto (Fora do formulário)
+    escolha = st.selectbox("Selecione o Produto:", options=lista_produtos, index=None, placeholder="Digite o nome...")
+
+    if escolha:
+        # Pega a categoria automática
+        df_p = st.session_state.df_mestre[st.session_state.df_mestre["Produto"] == escolha]
+        cat_p = df_p["Subclasse"].values[0] if not df_p.empty else "OUTROS"
         
+        st.info(f"📍 Categoria: {cat_p}")
+
         col_q, col_p = st.columns(2)
+        # O ENTER nesses campos agora atualizará o estado imediatamente
         v_qtd = col_q.number_input("Qtd:", min_value=0.1, value=1.0, step=0.1)
         v_pre = col_p.number_input("Preço R$:", min_value=0.0, value=0.0, step=0.01, format="%.2f")
         
-        # Botão grande para confirmar
-        enviar = st.form_submit_button("🛒 CONFIRMAR LANÇAMENTO", use_container_width=True)
-        
-        if enviar:
-            if escolha and v_pre > 0:
-                # Localiza a subclasse
-                df_p = st.session_state.df_mestre[st.session_state.df_mestre["Produto"] == escolha]
-                cat_p = df_p["Subclasse"].values[0] if not df_p.empty else "OUTROS"
-                
-                # Adiciona ao carrinho
+        # Botão de confirmação isolado
+        if st.button("🛒 CONFIRMAR LANÇAMENTO", use_container_width=True):
+            if v_pre > 0:
                 novo = pd.DataFrame([{"Produto": escolha, "Subclasse": cat_p, "Qtd": v_qtd, "Preço": v_pre, "Total": v_qtd * v_pre}])
                 st.session_state.carrinho = pd.concat([st.session_state.carrinho, novo], ignore_index=True)
+                st.success(f"Adicionado: {escolha}")
                 st.rerun()
             else:
-                st.error("Selecione o produto e preencha o preço!")
+                st.error("Coloque o preço!")
 
-    # EXIBIÇÃO DO CARRINHO
     if not st.session_state.carrinho.empty:
         st.divider()
-        st.write("### 📝 Itens no Carrinho")
+        st.write("### 📝 Carrinho")
         st.data_editor(st.session_state.carrinho, use_container_width=True, hide_index=True)
-        
-        c_limpar, c_ajuda = st.columns([1, 1])
-        if c_limpar.button("🗑️ Esvaziar Tudo", use_container_width=True):
+        if st.button("🗑️ Esvaziar Tudo"):
             st.session_state.carrinho = pd.DataFrame(columns=["Produto", "Subclasse", "Qtd", "Preço", "Total"])
             st.rerun()
 
 # --- ABA 2: CONFIGURAR LISTA ---
 with aba_config:
     st.subheader("⚙️ Configurar Meus Produtos")
+    # Mostra quantos produtos existem
+    st.write(f"Produtos na memória: {len(st.session_state.df_mestre)}")
+    
     mestre_ed = st.data_editor(
         st.session_state.df_mestre, 
         column_config={"Subclasse": st.column_config.SelectboxColumn("Categoria", options=SUBCLASSES, required=True)}, 
@@ -111,5 +108,5 @@ with aba_config:
     if st.button("💾 SALVAR LISTA"):
         st.session_state.df_mestre = mestre_ed.dropna(subset=['Produto'])
         st.session_state.df_mestre.to_csv(ARQUIVO_DADOS, index=False)
-        st.success("✅ Lista salva com sucesso!")
+        st.success("✅ Lista salva! Se os 72 sumiram, você pode colá-los aqui novamente.")
         st.rerun()
